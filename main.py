@@ -2,6 +2,29 @@
 import random
 from deap import creator, base, tools, algorithms
 
+
+def GenerateItems(size):
+    itens = []
+
+    for indice in range(size - 1):
+        weight = random.randint(1, 5)
+        value = random.randint(1, 20)
+        itens.append({"Weight": weight, "Value": value})
+    itens.append({"Weight": 0, "Value": 0})
+    return itens
+
+
+# ---------------------------Constantes----------------------------------------
+INDIVIDUAL_SIZE = 15
+BACKPACK_WEIGHT = 40
+POPULATION_SIZE = 300
+MAX_INTERACTION_COUNT = 10
+MAX_VARIATION = 2
+NUMBER_ITENS = 10
+LIST_REFERENCES = GenerateItems(NUMBER_ITENS)
+VARIATION_SIZE = 3
+
+# -----------------------------------------------------------------------------
 # Define o tipo fitness: Um objetivo com maximização
 creator.create("FitnessMax", base.Fitness, weights=(1.0,))
 
@@ -12,69 +35,86 @@ creator.create("Individual", list, fitness=creator.FitnessMax)
 # Toolbox para inicialização de componentes do algoritmo
 toolbox = base.Toolbox()
 
+# ------------------------------------------------------------------------------
+
 # Atributo booleano criado de forma aleatório
-toolbox.register("attr_bool",
-                 random.randint, 0, 1)
+toolbox.register("attribute_int",
+                 random.randint, 0, (NUMBER_ITENS - 1))
 
-# Indivíduo (tipo Inidividual) criado a partir do atributo definido
-# anteriormente. Ou seja, indivíduo do tipo booleano.
-# São criados 100 indivíduos. initRepeat faz esse papel
+# Tipo de Individual
 toolbox.register("individual",
-                 tools.initRepeat, creator.Individual, toolbox.attr_bool, n=100)
+                 tools.initRepeat, creator.Individual, toolbox.attribute_int, INDIVIDUAL_SIZE)
 
-# Criação da população, do tipo lista composto
-# por indivíduos (individual)
+# Criação da população
 toolbox.register("population",
                  tools.initRepeat, list, toolbox.individual)
-
-# Criação da função de fitness.
-# A função recebe um indivíduo e retorna uma tupla
-# que representa a avaliação do indivíduo
+# -------------------------------------------------------------------------------
+# Função fitness
 
 
 def evalOneMax(individual):
-    return sum(individual),
+    fit = 0
+    weight = 0
+    for iten in individual:
+        fit += LIST_REFERENCES[iten].get("Value", 0)
+        weight += LIST_REFERENCES[iten].get("Weight", 0)
+        if weight > BACKPACK_WEIGHT:
+            return 0
+    return fit
 
 
-# registra a função de fitness
+# Registra a função de fitness
 toolbox.register("evaluate", evalOneMax)
 
-# registro dos operadores
-toolbox.register("mate", tools.cxTwoPoint)  # crossover
-toolbox.register("mutate", tools.mutFlipBit, indpb=0.05)  # mutação
+# Crossover
+toolbox.register("mate", tools.cxTwoPoint)
+# Mutação def mutUniformInt(individual, low, up, indpb)
+toolbox.register("mutate", tools.mutUniformInt, low=0,
+                 up=(NUMBER_ITENS - 1), indpb=0.05)
 
-# registro do método de seleção
-toolbox.register("select", tools.selTournament, tournsize=3)
+# Registro do método de seleção
+toolbox.register("select", tools.selTournament, tournsize=VARIATION_SIZE)
 
-# tamanho da população
-population = toolbox.population(n=300)
+# Tamanho da população
+population = toolbox.population(n=POPULATION_SIZE)
 
+# ------------------------------------------------------------------------------
 
-# iniciando o processo de evolução
+# Melhor item de todas as gerações
+best = {"fit": 0, "ind": None}
+# Contador
+count = 0
+# Iniciando o processo de evolução
+while count < MAX_INTERACTION_COUNT:
 
-NGEN = 40  # número de gerações
-for gen in range(NGEN):
-
-    # O módulo algorithms implementa vários algoritmos evolucionários
-    # Na documentação tem a lista:
-    # https://deap.readthedocs.io/en/master/api/algo.html
-    # varAnd aplica operações de mutação e crossover
-    # cxpb: probabilidade de crossover
-    # mutpb: probabilidade de mutação
+    # Algoritmos evolucionários
     offspring = algorithms.varAnd(population, toolbox, cxpb=0.5, mutpb=0.1)
 
-    # avalia cada indivíduo
+    # Avalia cada indivíduo
     fits = toolbox.map(toolbox.evaluate, offspring)
 
-    # associa cada indivíduo ao seu valor de fitness
-    for fit, ind in zip(fits, offspring):
-        ind.fitness.values = fit
+    # Melhor da população
+    bestIndividual = {"fit": 0, "ind": None}
 
-    # aplica a seleção para gerar a nova população
+    # Associa cada indivíduo ao seu valor de fitness
+    for fit, ind in zip(fits, offspring):
+        ind.fitness.values = (fit),
+        if fit > bestIndividual.get("fit", 0):
+            bestIndividual = {"fit": fit, "ind": ind}
+
+    # Aplica a seleção para gerar a nova população
     population = toolbox.select(offspring, k=len(population))
 
-# retorna o k melhor indivíduos da última população
-top10 = tools.selBest(population, k=10)
+    # Processar condição de parada
+    bestIndividualFit = bestIndividual.get("fit")
+    bestFit = best.get("fit")
+
+    if ((bestIndividualFit >= bestFit and (bestIndividualFit <= bestFit + MAX_VARIATION)) or ((bestIndividualFit < bestFit and bestIndividualFit >= bestFit - MAX_VARIATION))):
+        count += 1
+    else:
+        count = 0
+
+    best = (bestFit > bestIndividualFit) and best or bestIndividual
 
 # Imprime o melhor
-print(top10[0])
+print(best.get("ind"))
